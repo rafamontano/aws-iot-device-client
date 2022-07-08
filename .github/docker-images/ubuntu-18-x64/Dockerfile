@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:18.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -42,45 +42,15 @@ RUN curl -sSL https://github.com/Kitware/CMake/releases/download/v3.10.0/cmake-3
     && make install
 
 ###############################################################################
-# Clone and build Google Test
+# Clone and build device client
 ###############################################################################
-WORKDIR /tmp
-RUN wget --ca-certificate=/etc/ssl/certs/ca-certificates.crt https://github.com/google/googletest/archive/release-1.10.0.tar.gz \
-    && tar xf release-1.10.0.tar.gz \
-    && cd googletest-release-1.10.0 \
-    && cmake -DBUILD_SHARED_LIBS=ON . \
-    && make \
-    && cp -a googletest/include/gtest /usr/include/ \
-    && cp -a googlemock/include/gmock /usr/include/ \
-    && cp -a lib/* /usr/lib/
+RUN git clone https://github.com/awslabs/aws-iot-device-client.git /src/aws-iot-device-client \
+    && mkdir -p /src/aws-iot-device-client/build \
+    && cd /src/aws-iot-device-client/build \
+    && cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=Debug .. \
+    && cmake --build . --target aws-iot-device-client
 
-###############################################################################
-# Clone and build valgrind
-###############################################################################
-WORKDIR /tmp
-RUN wget --ca-certificate=/etc/ssl/certs/ca-certificates.crt https://sourceware.org/pub/valgrind/valgrind-3.19.0.tar.bz2 \
-    && tar jxvf valgrind-3.19.0.tar.bz2 \
-    && cd valgrind-3.19.0 \
-    && ./configure \
-    && make \
-    && make install
+FROM ubuntu:18.04 AS deploy
 
-###############################################################################
-# Install Aws Iot Device Sdk Cpp v2
-###############################################################################
-WORKDIR /home/aws-iot-device-client
-RUN mkdir sdk-cpp-workspace \
-    && cd sdk-cpp-workspace \
-    && git clone https://github.com/aws/aws-iot-device-sdk-cpp-v2.git \
-    && cd aws-iot-device-sdk-cpp-v2 \
-    && git checkout ac3ba3774b031dde1b988e698880d6064d53b9d9 \
-    && git submodule update --init --recursive \
-    && cd .. \
-    && mkdir aws-iot-device-sdk-cpp-v2-build \
-    && cd aws-iot-device-sdk-cpp-v2-build \
-    && cmake -DCMAKE_INSTALL_PREFIX="/usr" -DUSE_OPENSSL=ON -DBUILD_DEPS=ON ../aws-iot-device-sdk-cpp-v2 \
-    && cmake --build . --target install
-
-ADD entry-script.sh /home/entry-script
-RUN chmod a+x /home/entry-script
-ENTRYPOINT ["/home/entry-script"]
+COPY --from=builder /src/aws-iot-device-client/build/aws-iot-device-client ./aws-iot-device-client
+CMD ["./aws-iot-device-client"]
