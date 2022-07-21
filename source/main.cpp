@@ -305,6 +305,15 @@ namespace Aws
 int main(int argc, char *argv[])
 {
     CliArgs cliArgs;
+
+    if (!LoggerFactory::reconfigure(config.config) &&
+        dynamic_cast<StdOutLogger *>(LoggerFactory::getLoggerInstance().get()) == nullptr)
+    {
+        // We attempted to start a non-stdout logger and failed, so we should fall back to STDOUT
+        config.config.logConfig.deviceClientLogtype = config.config.logConfig.LOG_TYPE_STDOUT;
+        LoggerFactory::reconfigure(config.config);
+    }
+
     if (Config::CheckTerminalArgs(argc, argv))
     {
         LoggerFactory::getLoggerInstance()->shutdown();
@@ -314,14 +323,6 @@ int main(int argc, char *argv[])
     {
         LoggerFactory::getLoggerInstance()->shutdown();
         return 1;
-    }
-
-    if (!LoggerFactory::reconfigure(config.config) &&
-        dynamic_cast<StdOutLogger *>(LoggerFactory::getLoggerInstance().get()) == nullptr)
-    {
-        // We attempted to start a non-stdout logger and failed, so we should fall back to STDOUT
-        config.config.logConfig.deviceClientLogtype = config.config.logConfig.LOG_TYPE_STDOUT;
-        LoggerFactory::reconfigure(config.config);
     }
 
     EnvUtils envUtils;
